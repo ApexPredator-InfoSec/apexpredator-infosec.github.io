@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.10.0">Jekyll</generator><link href="https://apexpredator-infosec.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="https://apexpredator-infosec.github.io/" rel="alternate" type="text/html" /><updated>2025-12-01T14:05:14-05:00</updated><id>https://apexpredator-infosec.github.io/feed.xml</id><title type="html">ApexPredator’s Blog</title><subtitle>Blog for tutorials and research in Reverse Engineering binaries and malware, exploit developmet, and Window&apos;s Kernel Internals.  This is a work in progress and will likely be slow to populate. I will update as I hav etime.</subtitle><entry><title type="html">Windows Kernel Debugging Walk Through</title><link href="https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through.html" rel="alternate" type="text/html" title="Windows Kernel Debugging Walk Through" /><published>2025-12-01T13:45:04-05:00</published><updated>2025-12-01T13:45:04-05:00</updated><id>https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through</id><content type="html" xml:base="https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through.html"><![CDATA[<p>This is a quick walk through on the basics of Windows Kernel debugging. You will need two Windows Virtual Machines (VM) for this scenario. I used two Windows 11 25H2 VMs.</p>
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.10.0">Jekyll</generator><link href="https://apexpredator-infosec.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="https://apexpredator-infosec.github.io/" rel="alternate" type="text/html" /><updated>2025-12-01T14:17:59-05:00</updated><id>https://apexpredator-infosec.github.io/feed.xml</id><title type="html">ApexPredator’s Blog</title><subtitle>Blog for tutorials and research in Reverse Engineering binaries and malware, exploit developmet, and Window&apos;s Kernel Internals.  This is a work in progress and will likely be slow to populate. I will update as I hav etime.</subtitle><entry><title type="html">Windows Kernel Debugging Walk Through</title><link href="https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through.html" rel="alternate" type="text/html" title="Windows Kernel Debugging Walk Through" /><published>2025-12-01T13:45:04-05:00</published><updated>2025-12-01T13:45:04-05:00</updated><id>https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through</id><content type="html" xml:base="https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through.html"><![CDATA[<p>This is a quick walk through on the basics of Windows Kernel debugging. You will need two Windows Virtual Machines (VM) for this scenario. I used two Windows 11 25H2 VMs.</p>
 
 <p>You can use which ever Hyper Visor you prefer. I used Hyper-V because it’s easy to use and allows you to run Virtualization Based Security (VBS) on your host and the VMs at the same time.</p>
 
@@ -12,7 +12,7 @@
 <p>It is important to ensure that Secure Boot is disabled on the Debugee machine. Secure Boot can be enabled on the Debugger machine.</p>
 
 <p>Set static IPs on the NIC assigned to the debug network. I used 10.10.10.10 for the Debugger machine and 10.10.10.11 for the Debugee machine.
-![[debugger_ipconfig.png]]</p>
+<img src="/assets/images/debugger_ipconfig.png" alt="Debugger ipconfig" /></p>
 
 <p>The Debugger machine needs WinDbg installed. You can download it as part of the Windows Software Development Kit (SDK) downlaoded from <a href="https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/">Windows SDK</a> or you can install WinDbg from a PowerShell terminal with:</p>
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>winget install Microsoft.WinDbg
@@ -22,9 +22,9 @@
 
 <p>You can go ahead and start WinDbg and configure a Kernel Debugging connection listener by clicking File-&gt;Stat Debugging-&gt; Attach to Kernel. Then set a port. You can use the default port 50000 or any other unused UDP port. You will also need a 256-bit authentication key that must be in the form of four 64-bit chunks separated by dots i.e. x.x.x.x. You can use lowercase a-z and 0-9 for each chunk. In my example I use kernel.dbg.lab.2025</p>
 
-<p>![[kernel_debug_connection1.png]]
-![[kernel_debug_connection2.png]]
-![[Kernel_debug_connection3.png]]</p>
+<p><img src="/assets/images/kernel_debug_connection1.png" alt="debugger connection 1" />
+<img src="/assets/images/kernel_debug_connection2.png" alt="debugger connection 2" />
+<img src="/assets/images/Kernel_debug_connection3.png" alt="debugger connection 3" /></p>
 
 <p>You can pre-download symbols (function names, etc.) by opening a command prompt and creating a symbols folder and running the symchk tool. Kernel debugging will be a lot more confusing if you don’t have symbols. As long as you have internet connection on the Debugger machine you can download symbols on the fly, but it saves time when debugging to pre-download them.</p>
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mkdir symbols
@@ -43,16 +43,16 @@ bcdedit /dbgsettings net hostip:10.10.10.10 port:50000 key:kernel.dbg.lab.2025
 
 bcdedit /set "{dbgsettings} dhcp no"
 </code></pre></div></div>
-<p>![[debuggee_enable_debug.png]]
-![[debuggee_debugg_settings.png]]
+<p><img src="/assets/images/debuggee_enable_debug.png" alt="enable debug" />
+<img src="/assets/images/debuggee_debugg_settings.png" alt="debug settings" />
 Reboot the Debugee machine and you will see the connection on the Debugger machine.
-![[debugger_connected.png]]
+<img src="/assets/images/debugger_connected.png" alt="debugger connected" />
 Click the pause button to break. This will cause the Debugee machine to become unresponsive to any input since you have initiated a break into the kernel. This happens anytime you hit a break point or manually break. Now is a good time to set your symbol path and force a reload of the symbols. The command bar changes from <em>BUSY</em> Debuggee is running… to 0:kd&gt;. You will be able to type commands into the command bar and hit enter.</p>
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>.sympath srv*C:\symbols*https://msdl.microsoft.com/download/symbols
 
 .reload /f
 </code></pre></div></div>
-<p>![[setsymbols.png]]
+<p><img src="/assets/images/setsymbols.png" alt="set symbols" />
 The .reload /f will force a reload of the symbols and attempt to download any missing symbols. Type g in the command bar and hit enter or click the green play button to resume the kernel and allow the Debugee to continue processing.</p>
 
 <p>Here is a table of some of the useful WinDbg commands to use with kernel debugging:</p>
@@ -86,13 +86,13 @@ Here is an example of listing the currently loaded modules and then just the nt 
 
 lm m nt
 </code></pre></div></div>
-<p>![[lm.png]]
-![[lm_m_nt.png]]</p>
+<p><img src="/assets/images/lm.png" alt="lm" />
+<img src="/assets/images/lm_m_nt.png" alt="lm m nt" /></p>
 
 <p>Here is an example of dumping the HalDispatchTable in the nt kernel using dqs:</p>
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>dqs nt!HalDispatchTable
 </code></pre></div></div>
-<p>![[dqs_nt_haldispatchtable.png]]</p>
+<p><img src="/assets/images/dqs_nt_haldispatchtable.png" alt="HalDispatchTable" /></p>
 
 <p>Start cmd.exe and launch calc.exe from the command prompt on the Debugee machine. You can then search for the calc.exe process, interact with it, and display it’s process info with:</p>
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>!process 0 0 calc.exe
@@ -101,24 +101,24 @@ lm m nt
 
 !process
 </code></pre></div></div>
-<p>![[calc_process.png]]
-![[calc_process_details.png]]
+<p><img src="/assets/images/calc_process.png" alt="calc process" />
+<img src="/assets/images/calc_process_details.png" alt="calc process details" />
 The address following THREAD in the above image is the address to the KTHREAD structure for the process. Process in Windows are a management and control mechanism for executing code. Processes do not execute code themselves. All code is executed under the process as a thread or fiber. When the process has multiple threads the one marked as ‘executive’ will have the KTHREAD. You can highlight the address and ctrl+c to copy the address and dump the KTHREAD with:</p>
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>dt -v nt!_KTHREAD `kthread address`
 </code></pre></div></div>
-<p>![[calc_kthread.png]]</p>
+<p><img src="/assets/images/calc_kthread.png" alt="calc kthread" /></p>
 
 <p>You can then take the StackBase, which is the address following the last address of the stack, and subtract from it to display the end of the stack. You can subtract 0x100 bytes and see a nice code cave no the Kernel Stack for the process with:</p>
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>dqs `StackBase address`-100
 </code></pre></div></div>
-<p>![[kthread.png]]</p>
+<p><img src="/assets/images/kthread.png" alt="kthread stack base" /></p>
 
 <p>If you want to see where the Kernel Stack is currently point and what is on it you can use:</p>
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>dt -v nt!_KTHREAD `KTHREAD address` KernelStack
 
 dqs `address displayed from above command`
 </code></pre></div></div>
-<p>![[kernelstack.png]]</p>
+<p><img src="/assets/images/kernelstack.png" alt="kernel stack" /></p>
 
 <p>This was a quick run down on how to setup Windows Kernel Debugging and some quick familiarization on using WinDbg to help you get your bearings to follow along in future tutorials.</p>
 

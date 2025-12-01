@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.10.0">Jekyll</generator><link href="https://apexpredator-infosec.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="https://apexpredator-infosec.github.io/" rel="alternate" type="text/html" /><updated>2025-12-01T14:56:32-05:00</updated><id>https://apexpredator-infosec.github.io/feed.xml</id><title type="html">ApexPredator’s Blog</title><subtitle>Blog for tutorials and research in Reverse Engineering binaries and malware, exploit developmet, and Window&apos;s Kernel Internals.  This is a work in progress and will likely be slow to populate. I will update as I hav etime.</subtitle><entry><title type="html">Windows Kernel Debugging Walk Through</title><link href="https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through.html" rel="alternate" type="text/html" title="Windows Kernel Debugging Walk Through" /><published>2025-12-01T13:45:04-05:00</published><updated>2025-12-01T13:45:04-05:00</updated><id>https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through</id><content type="html" xml:base="https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through.html"><![CDATA[<p>This is a quick walk through on the basics of Windows Kernel debugging. You will need two Windows Virtual Machines (VM) for this scenario. I used two Windows 11 25H2 VMs.</p>
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.10.0">Jekyll</generator><link href="https://apexpredator-infosec.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="https://apexpredator-infosec.github.io/" rel="alternate" type="text/html" /><updated>2025-12-01T15:04:07-05:00</updated><id>https://apexpredator-infosec.github.io/feed.xml</id><title type="html">ApexPredator’s Blog</title><subtitle>Blog for tutorials and research in Reverse Engineering binaries and malware, exploit developmet, and Window&apos;s Kernel Internals.  This is a work in progress and will likely be slow to populate. I will update as I hav etime.</subtitle><entry><title type="html">Windows Kernel Debugging Walk Through</title><link href="https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through.html" rel="alternate" type="text/html" title="Windows Kernel Debugging Walk Through" /><published>2025-12-01T13:45:04-05:00</published><updated>2025-12-01T13:45:04-05:00</updated><id>https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through</id><content type="html" xml:base="https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through.html"><![CDATA[<p>This is a quick walk through on the basics of Windows Kernel debugging. You will need two Windows Virtual Machines (VM) for this scenario. I used two Windows 11 25H2 VMs.</p>
 
 <p>You can use which ever Hyper Visor you prefer. I used Hyper-V because it’s easy to use and allows you to run Virtualization Based Security (VBS) on your host and the VMs at the same time.</p>
 
@@ -57,31 +57,106 @@ The .reload /f will force a reload of the symbols and attempt to download any mi
 
 <p>Here is a table of some of the useful WinDbg commands to use with kernel debugging:</p>
 
-<p>| Command                              | Description                                                                                                                                                                                                                                             |
-| ——————————————————————————————————————————————————————————————————————————————————-  | ——————————————————————————————————————————————————————————————————————————————————- |
-| dq <code class="language-plaintext highlighter-rouge">address or register</code>             | display qwords at specified address or address in register                                                                                                                                                                                              |
-| dd <code class="language-plaintext highlighter-rouge">address or register</code>             | display dwords at specified address or address in register                                                                                                                                                                                              |
-| db <code class="language-plaintext highlighter-rouge">address or register</code>             | display byte at specified address or address in register                                                                                                                                                                                                |
-| dqs <code class="language-plaintext highlighter-rouge">address or register</code>            | same as dq but also display symbols                                                                                                                                                                                                                     |
-| dds <code class="language-plaintext highlighter-rouge">address or register</code>            | same as dd but also display symbols                                                                                                                                                                                                                     |
-| ? <code class="language-plaintext highlighter-rouge">expression</code>                       | perform math operations                                                                                                                                                                                                                                 |
-| u <code class="language-plaintext highlighter-rouge">address or register</code>              | disassemble code at specified address or address in register                                                                                                                                                                                            |
-| .formats <code class="language-plaintext highlighter-rouge">data</code>                      | display the data in several different useful formats. Helps with converting hex to binary or decimal                                                                                                                                                    |
-| !process <code class="language-plaintext highlighter-rouge">blank or 0 0 process_name</code> | search for a process or display information about current process                                                                                                                                                                                       |
-| .process /i <code class="language-plaintext highlighter-rouge">EPROCESS address</code>       | interact with the specified process                                                                                                                                                                                                                     |
-| bp <code class="language-plaintext highlighter-rouge">address</code>                         | set a breakpoint at specified address, you can use symbols instead of address                                                                                                                                                                           |
-| bu <code class="language-plaintext highlighter-rouge">address</code>                         | set an unresolved address. If using symbols and the module has not been loaded yet you need to do an unresolved break point and it will resolve to address once the symbols are loaded                                                                  |
-| ba <code class="language-plaintext highlighter-rouge">e1 /p process address</code>           | set a hardware break point on execution of a specified address from within a specified process. You can leave out process to break for all processes, can lead to unintentional breaks, and you can change e to r or w for read or write to the address |
-| bl                                   | list break points                                                                                                                                                                                                                                       |
-| bc <code class="language-plaintext highlighter-rouge">* or number</code>                     | clear or delete all break points or specified break point by number retrieved with bl                                                                                                                                                                   |
-| bd <code class="language-plaintext highlighter-rouge">* or number</code>                     | disable but no delete all break points or specified break point by number retrieved with bl                                                                                                                                                             |
-| .reload /f                           | force reload of symbols and download missing symbols                                                                                                                                                                                                    |
-| !address <code class="language-plaintext highlighter-rouge">address</code>                   | display information about specified address                                                                                                                                                                                                             |
-| !pte <code class="language-plaintext highlighter-rouge">address</code>                       | display the page table entry for the specified virtual address. You can also use it with a PTE address to retrieve the associated virtual address                                                                                                       |
-| lm <code class="language-plaintext highlighter-rouge">blank or m module_name</code>          | list loaded modules with base and end address or list only specified module                                                                                                                                                                             |
-| !drvobj <code class="language-plaintext highlighter-rouge">driver_name 2</code>              | list information about specified driver                                                                                                                                                                                                                 |
-| dt <code class="language-plaintext highlighter-rouge">-v module!symbol</code>                | display table of a windows data structure                                                                                                                                                                                                               |
-Here is an example of listing the currently loaded modules and then just the nt kernel itself:</p>
+<table>
+  <thead>
+    <tr>
+      <th>Command</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">dq address or register</code></td>
+      <td>Display qwords at specified address or address in register</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">dd address or register</code></td>
+      <td>Display dwords at specified address or address in register</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">db address or register</code></td>
+      <td>Display byte at specified address or address in register</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">dqs address or register</code></td>
+      <td>Same as dq but also display symbols</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">dds address or register</code></td>
+      <td>Same as dd but also display symbols</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">? expression</code></td>
+      <td>Perform math operations</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">u address or register</code></td>
+      <td>Disassemble code at specified address or address in register</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">.formats data</code></td>
+      <td>Display the data in several different useful formats. Helps with converting hex to binary or decimal</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">!process blank or 0 0 process_name</code></td>
+      <td>Search for a process or display information about current process</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">.process /i EPROCESS address</code></td>
+      <td>Interact with the specified process</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">bp address</code></td>
+      <td>Set a breakpoint at specified address, you can use symbols instead of address</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">bu address</code></td>
+      <td>Set an unresolved breakpoint. Resolves once symbols are loaded</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ba e1 /p process address</code></td>
+      <td>Set a hardware breakpoint on execution of a specified address from within a specified process. You can change <code class="language-plaintext highlighter-rouge">e</code> to <code class="language-plaintext highlighter-rouge">r</code> or <code class="language-plaintext highlighter-rouge">w</code> for read/write</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">bl</code></td>
+      <td>List breakpoints</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">bc * or number</code></td>
+      <td>Clear or delete all breakpoints or specified breakpoint by number retrieved with <code class="language-plaintext highlighter-rouge">bl</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">bd * or number</code></td>
+      <td>Disable but not delete all breakpoints or specified breakpoint by number retrieved with <code class="language-plaintext highlighter-rouge">bl</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">.reload /f</code></td>
+      <td>Force reload of symbols and download missing symbols</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">!address address</code></td>
+      <td>Display information about specified address</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">!pte address</code></td>
+      <td>Display the page table entry for the specified virtual address. Can also use with a PTE address to retrieve the associated virtual address</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">lm blank or m module_name</code></td>
+      <td>List loaded modules with base and end address or list only specified module</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">!drvobj driver_name 2</code></td>
+      <td>List information about specified driver</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">dt -v module!symbol</code></td>
+      <td>Display table of a Windows data structure</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Here is an example of listing the currently loaded modules and then just the nt kernel itself:</p>
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>lm m
 
 lm m nt

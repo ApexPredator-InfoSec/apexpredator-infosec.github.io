@@ -1,205 +1,58 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.10.0">Jekyll</generator><link href="https://apexpredator-infosec.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="https://apexpredator-infosec.github.io/" rel="alternate" type="text/html" /><updated>2025-12-12T13:22:39-05:00</updated><id>https://apexpredator-infosec.github.io/feed.xml</id><title type="html">ApexPredator’s Blog</title><subtitle>Blog for tutorials and research in Reverse Engineering binaries and malware, exploit developmet, and Window&apos;s Kernel Internals.  This is a work in progress and will likely be slow to populate. I will update as I hav etime.</subtitle><entry><title type="html">Windows Kernel Debugging Walk Through</title><link href="https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through.html" rel="alternate" type="text/html" title="Windows Kernel Debugging Walk Through" /><published>2025-12-01T13:45:04-05:00</published><updated>2025-12-01T13:45:04-05:00</updated><id>https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through</id><content type="html" xml:base="https://apexpredator-infosec.github.io/posts/2025/12/01/kernel-debugging-walk-through.html"><![CDATA[<p>This is a quick walk through on the basics of Windows Kernel debugging. You will need two Windows Virtual Machines (VM) for this scenario. I used two Windows 11 25H2 VMs.</p>
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Finding A Needle In A KSTACK | ApexPredator’s Blog</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Finding A Needle In A KSTACK" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="I ran in to an issue with triggering a bugcheck AKA the Blue Screen Of Death or BSOD on Windows 10 20H1 while solving an Extra Mile exercise in the EXP-401 course. The challenge was to change the exploit from the course material targeting CVE-2021-1732 from a Data Only attack to Code Execution." />
+<meta property="og:description" content="I ran in to an issue with triggering a bugcheck AKA the Blue Screen Of Death or BSOD on Windows 10 20H1 while solving an Extra Mile exercise in the EXP-401 course. The challenge was to change the exploit from the course material targeting CVE-2021-1732 from a Data Only attack to Code Execution." />
+<link rel="canonical" href="https://apexpredator-infosec.github.io/posts/2025/01/01/Finding-A-Needle-In-A-KSTACK.html" />
+<meta property="og:url" content="https://apexpredator-infosec.github.io/posts/2025/01/01/Finding-A-Needle-In-A-KSTACK.html" />
+<meta property="og:site_name" content="ApexPredator’s Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2025-01-01T13:16:45-05:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Finding A Needle In A KSTACK" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","dateModified":"2025-01-01T13:16:45-05:00","datePublished":"2025-01-01T13:16:45-05:00","description":"I ran in to an issue with triggering a bugcheck AKA the Blue Screen Of Death or BSOD on Windows 10 20H1 while solving an Extra Mile exercise in the EXP-401 course. The challenge was to change the exploit from the course material targeting CVE-2021-1732 from a Data Only attack to Code Execution.","headline":"Finding A Needle In A KSTACK","mainEntityOfPage":{"@type":"WebPage","@id":"https://apexpredator-infosec.github.io/posts/2025/01/01/Finding-A-Needle-In-A-KSTACK.html"},"url":"https://apexpredator-infosec.github.io/posts/2025/01/01/Finding-A-Needle-In-A-KSTACK.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link id="main-stylesheet" rel="stylesheet" href="/assets/css/style.css"><link type="application/atom+xml" rel="alternate" href="https://apexpredator-infosec.github.io/feed.xml" title="ApexPredator&apos;s Blog" />
+</head>
+<body><header class="site-header">
 
-<p>You can use which ever Hyper Visor you prefer. I used Hyper-V because it’s easy to use and allows you to run Virtualization Based Security (VBS) on your host and the VMs at the same time.</p>
+  <div class="wrapper">
+    <a class="site-title" rel="author" href="/">ApexPredator&#39;s Blog</a>
+      <nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon"></span>
+        </label>
 
-<p>You can download the latest version of Windows installer ISO from <a href="https://www.microsoft.com/en-us/software-download/windows11">Microsoft Download</a></p>
+        <div class="nav-items">
+  <a class="nav-item" href="/about/">About</a>
+</div>
 
-<p>I recommend setting up two Network Interface Cards (NIC) per VM. One will be used for debugging the kernel and the other will be used for accessing the internet. If you want a completely isolated environment you could get by with one NIC. The debugging NIC must be the first NIC on the system.</p>
+      </nav>
+  </div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
 
-<p>This is a screenshot of my debugger VM settings showing the network setup. The debugging network is on it’s own private Virtual Switch.
-<img src="/assets/images/VM_network_config.png" alt="Network_config" /></p>
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">Finding A Needle In A KSTACK</h1>
+    <div class="post-meta">
+      <time class="dt-published" datetime="2025-01-01T13:16:45-05:00" itemprop="datePublished">
+        Jan 1, 2025
+      </time>
+    </div>
+  </header>
 
-<p>It is important to ensure that Secure Boot is disabled on the Debugee machine. Secure Boot can be enabled on the Debugger machine.</p>
-
-<p>Set static IPs on the NIC assigned to the debug network. I used 10.10.10.10 for the Debugger machine and 10.10.10.11 for the Debugee machine.
-<img src="/assets/images/debugger_ipconfig.png" alt="Debugger ipconfig" /></p>
-
-<p>The Debugger machine needs WinDbg installed. You can download it as part of the Windows Software Development Kit (SDK) downlaoded from <a href="https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/">Windows SDK</a> or you can install WinDbg from a PowerShell terminal with:</p>
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>winget install Microsoft.WinDbg
-</code></pre></div></div>
-
-<p>I also use the Debugger machine as my development platform and install Visual Studio <a href="https://visualstudio.microsoft.com/downloads/">Visual Studio Download</a> and the Windows Driver Kit <a href="https://learn.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk">Windows Driver Kit Download</a>. This is optional and not required if you are not doing any development.</p>
-
-<p>You can go ahead and start WinDbg and configure a Kernel Debugging connection listener by clicking File-&gt;Stat Debugging-&gt; Attach to Kernel. Then set a port. You can use the default port 50000 or any other unused UDP port. You will also need a 256-bit authentication key that must be in the form of four 64-bit chunks separated by dots i.e. x.x.x.x. You can use lowercase a-z and 0-9 for each chunk. In my example I use kernel.dbg.lab.2025</p>
-
-<p><img src="/assets/images/kernel_debug_connection1.png" alt="debugger connection 1" />
-<img src="/assets/images/kernel_debug_connection2.png" alt="debugger connection 2" />
-<img src="/assets/images/Kernel_debug_connection3.png" alt="debugger connection 3" /></p>
-
-<p>You can pre-download symbols (function names, etc.) by opening a command prompt and creating a symbols folder and running the symchk tool. Kernel debugging will be a lot more confusing if you don’t have symbols. As long as you have internet connection on the Debugger machine you can download symbols on the fly, but it saves time when debugging to pre-download them.</p>
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mkdir symbols
-
-cd "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64"
-
-symchk /r C:\Windows\System32\*.dll /s srv*C:\symbols*https://msdl.microsoft.com/download/symbols
-
-symchk /r C:\Windows\System32\drivers\*.sys /s srv*C:\symbols*https://msdl.microsoft.com/download/symbols
-</code></pre></div></div>
-
-<p>Now switch over to the Debugee machine to setup the IP information and configure kernel debugging. I used 10.10.10.11 for the Debugee IP on the debugging network. The following commands on an administrator command prompt will enable network kernel debugging to connect to 10.10.10.10 on UDP port 50000 with key kernel.dbg.lab.2025:</p>
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>bcdedit /debug on
-
-bcdedit /dbgsettings net hostip:10.10.10.10 port:50000 key:kernel.dbg.lab.2025
-
-bcdedit /set "{dbgsettings} dhcp no"
-</code></pre></div></div>
-<p><img src="/assets/images/debuggee_enable_debug.png" alt="enable debug" />
-<img src="/assets/images/debuggee_debugg_settings.png" alt="debug settings" />
-Reboot the Debugee machine and you will see the connection on the Debugger machine.
-<img src="/assets/images/debugger_connected.png" alt="debugger connected" />
-Click the pause button to break. This will cause the Debugee machine to become unresponsive to any input since you have initiated a break into the kernel. This happens anytime you hit a break point or manually break. Now is a good time to set your symbol path and force a reload of the symbols. The command bar changes from <em>BUSY</em> Debuggee is running… to 0:kd&gt;. You will be able to type commands into the command bar and hit enter.</p>
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>.sympath srv*C:\symbols*https://msdl.microsoft.com/download/symbols
-
-.reload /f
-</code></pre></div></div>
-<p><img src="/assets/images/setsymbols.png" alt="set symbols" />
-The .reload /f will force a reload of the symbols and attempt to download any missing symbols. Type g in the command bar and hit enter or click the green play button to resume the kernel and allow the Debugee to continue processing.</p>
-
-<p>Here is a table of some of the useful WinDbg commands to use with kernel debugging:</p>
-
-<table>
-  <thead>
-    <tr>
-      <th>Command</th>
-      <th>Description</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">dq address or register</code></td>
-      <td>Display qwords at specified address or address in register</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">dd address or register</code></td>
-      <td>Display dwords at specified address or address in register</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">db address or register</code></td>
-      <td>Display byte at specified address or address in register</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">dqs address or register</code></td>
-      <td>Same as dq but also display symbols</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">dds address or register</code></td>
-      <td>Same as dd but also display symbols</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">? expression</code></td>
-      <td>Perform math operations</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">u address or register</code></td>
-      <td>Disassemble code at specified address or address in register</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">.formats data</code></td>
-      <td>Display the data in several different useful formats. Helps with converting hex to binary or decimal</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">!process blank or 0 0 process_name</code></td>
-      <td>Search for a process or display information about current process</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">.process /i EPROCESS address</code></td>
-      <td>Interact with the specified process</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">bp address</code></td>
-      <td>Set a breakpoint at specified address, you can use symbols instead of address</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">bu address</code></td>
-      <td>Set an unresolved breakpoint. Resolves once symbols are loaded</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">ba e1 /p process address</code></td>
-      <td>Set a hardware breakpoint on execution of a specified address from within a specified process. You can change <code class="language-plaintext highlighter-rouge">e</code> to <code class="language-plaintext highlighter-rouge">r</code> or <code class="language-plaintext highlighter-rouge">w</code> for read/write</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">bl</code></td>
-      <td>List breakpoints</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">bc * or number</code></td>
-      <td>Clear or delete all breakpoints or specified breakpoint by number retrieved with <code class="language-plaintext highlighter-rouge">bl</code></td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">bd * or number</code></td>
-      <td>Disable but not delete all breakpoints or specified breakpoint by number retrieved with <code class="language-plaintext highlighter-rouge">bl</code></td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">.reload /f</code></td>
-      <td>Force reload of symbols and download missing symbols</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">!address address</code></td>
-      <td>Display information about specified address</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">!pte address</code></td>
-      <td>Display the page table entry for the specified virtual address. Can also use with a PTE address to retrieve the associated virtual address</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">lm blank or m module_name</code></td>
-      <td>List loaded modules with base and end address or list only specified module</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">!drvobj driver_name 2</code></td>
-      <td>List information about specified driver</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">dt -v module!symbol</code></td>
-      <td>Display table of a Windows data structure</td>
-    </tr>
-  </tbody>
-</table>
-
-<p>Here is an example of listing the currently loaded modules and then just the nt kernel itself:</p>
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>lm m
-
-lm m nt
-</code></pre></div></div>
-<p><img src="/assets/images/lm.png" alt="lm" />
-<img src="/assets/images/lm_m_nt.png" alt="lm m nt" /></p>
-
-<p>Here is an example of dumping the HalDispatchTable in the nt kernel using dqs:</p>
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>dqs nt!HalDispatchTable
-</code></pre></div></div>
-<p><img src="/assets/images/dqs_nt_haldispatchtable.png" alt="HalDispatchTable" /></p>
-
-<p>Start cmd.exe and launch calc.exe from the command prompt on the Debugee machine. You can then search for the calc.exe process, interact with it, and display it’s process info with:</p>
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>!process 0 0 calc.exe
-
-.process /i `EPROCESS address from above command`
-
-g
-
-!process
-</code></pre></div></div>
-<p><img src="/assets/images/calc_process.png" alt="calc process" />
-<img src="/assets/images/calc_process_details.png" alt="calc process details" />
-The address following THREAD in the above image is the address to the KTHREAD structure for the process. Process in Windows are a management and control mechanism for executing code. Processes do not execute code themselves. All code is executed under the process as a thread or fiber. When the process has multiple threads the one marked as ‘executive’ will have the KTHREAD. You can highlight the address and ctrl+c to copy the address and dump the KTHREAD with:</p>
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>dt -v nt!_KTHREAD `kthread address`
-</code></pre></div></div>
-<p><img src="/assets/images/calc_kthread.png" alt="calc kthread" /></p>
-
-<p>You can then take the StackBase, which is the address following the last address of the stack, and subtract from it to display the end of the stack. You can subtract 0x100 bytes and see a nice code cave no the Kernel Stack for the process with:</p>
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>dqs `StackBase address`-100
-</code></pre></div></div>
-<p><img src="/assets/images/kthread.png" alt="kthread stack base" /></p>
-
-<p>If you want to see where the Kernel Stack is currently point and what is on it you can use:</p>
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>dt -v nt!_KTHREAD `KTHREAD address` KernelStack
-
-dqs `address displayed from above command`
-</code></pre></div></div>
-<p><img src="/assets/images/kernelstack.png" alt="kernel stack" /></p>
-
-<p>This was a quick run down on how to setup Windows Kernel Debugging and some quick familiarization on using WinDbg to help you get your bearings to follow along in future tutorials.</p>
-
-<p>I highly recommend book marking the Vergilius Project to enumerate Windows Kernel Structures if you are going to be diving in to Windows Kernel Debugging <a href="https://www.vergiliusproject.com/">Vergilius Project</a></p>]]></content><author><name></name></author><category term="posts" /><summary type="html"><![CDATA[This is a quick walk through on the basics of Windows Kernel debugging. You will need two Windows Virtual Machines (VM) for this scenario. I used two Windows 11 25H2 VMs.]]></summary></entry><entry><title type="html">Test Post</title><link href="https://apexpredator-infosec.github.io/posts/2025/11/21/test.html" rel="alternate" type="text/html" title="Test Post" /><published>2025-11-21T14:23:05-05:00</published><updated>2025-11-21T14:23:05-05:00</updated><id>https://apexpredator-infosec.github.io/posts/2025/11/21/test</id><content type="html" xml:base="https://apexpredator-infosec.github.io/posts/2025/11/21/test.html"><![CDATA[<p>This is a test post</p>]]></content><author><name></name></author><category term="posts" /><summary type="html"><![CDATA[This is a test post]]></summary></entry><entry><title type="html">Finding A Needle In A KSTACK</title><link href="https://apexpredator-infosec.github.io/posts/2025/01/01/Finding-A-Needle-In-A-KSTACK.html" rel="alternate" type="text/html" title="Finding A Needle In A KSTACK" /><published>2025-01-01T13:16:45-05:00</published><updated>2025-01-01T13:16:45-05:00</updated><id>https://apexpredator-infosec.github.io/posts/2025/01/01/Finding-A-Needle-In-A-KSTACK</id><content type="html" xml:base="https://apexpredator-infosec.github.io/posts/2025/01/01/Finding-A-Needle-In-A-KSTACK.html"><![CDATA[<p>I ran in to an issue with triggering a bugcheck AKA the Blue Screen Of Death or BSOD on Windows 10 20H1 while solving an Extra Mile exercise in the EXP-401 course. The challenge was to change the exploit from the course material targeting CVE-2021-1732 from a Data Only attack to Code Execution.</p>
+  <div class="post-content e-content" itemprop="articleBody">
+    <p>I ran in to an issue with triggering a bugcheck AKA the Blue Screen Of Death or BSOD on Windows 10 20H1 while solving an Extra Mile exercise in the EXP-401 course. The challenge was to change the exploit from the course material targeting CVE-2021-1732 from a Data Only attack to Code Execution.</p>
 
 <p>In a Data Only Attack we use the read/write primitives of the exploit to find the SYSTEM process and copy it’s token to our current process thus elevating our process to SYSTEM integrity. This prevents us from having to execute shellcode or dynamic code in the kernel, which would be stopped by Hypervisor-protected Code Integrity (HVCI). HVCI works sort of like Arbitrary Code Guard (ACG) in user-mode, but protects the kernel-mode memory. The gist at a high level is code is immutable, dynamic code is bad and should not run and therefor HVCI makes it impossible to run dynamic code. You can read more about HVCI on the Microsoft site. <a href="https://learn.microsoft.com/en-us/windows/security/hardware-security/enable-virtualization-based-protection-of-code-integrity?tabs=security">HVCI</a> HVCI has to be turned off by removing the Hyper-V role and disabling Virtualization Based Security (VBS) in the VM to play around with the kernel-mode code execution challenge. A Windows 10 20H2 VM without HVCI/VBS is used in the demo for this blog.</p>
 
@@ -1171,4 +1024,60 @@ _TEXT	ENDS
 End
 </code></pre>
 
-<p>And for our hard work we receive a nice SYSTEM command shell.![[post2-kstack-success.png]]</p>]]></content><author><name></name></author><category term="posts" /><summary type="html"><![CDATA[I ran in to an issue with triggering a bugcheck AKA the Blue Screen Of Death or BSOD on Windows 10 20H1 while solving an Extra Mile exercise in the EXP-401 course. The challenge was to change the exploit from the course material targeting CVE-2021-1732 from a Data Only attack to Code Execution.]]></summary></entry></feed>
+<p>And for our hard work we receive a nice SYSTEM command shell.![[post2-kstack-success.png]]</p>
+
+  </div>
+
+  <a class="u-url" href="/posts/2025/01/01/Finding-A-Needle-In-A-KSTACK.html" hidden></a>
+</article>
+
+      </div>
+    </main><link id="fa-stylesheet" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.0.0/css/all.min.css">
+
+<footer class="site-footer h-card">
+  <data class="u-url" value="/"></data>
+
+  <div class="wrapper">
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col">
+      </div>
+      <div class="footer-col">
+        <p>Blog for tutorials and research in Reverse Engineering binaries and malware, exploit developmet, and Window&#39;s Kernel Internals.  This is a work in progress and will likely be slow to populate. I will update as I hav etime.</p>
+      </div>
+    </div>
+
+    <div class="social-links"><ul class="social-media-list"><li>
+    <a rel="me" href="https://github.com/ApexPredator-InfoSec" target="_blank" title="ApexPredator-InfoSec Github">
+      <span class="grey fa-brands fa-github fa-lg"></span>
+    </a>
+  </li><li>
+    <a rel="me" href="https://x.com/ApexP6975" target="_blank" title="ApexPredator at X">
+      <span class="grey fa-brands fa-x-twitter fa-lg"></span>
+    </a>
+  </li><li>
+    <a rel="me" href="https://www.linkedin.com/in/andrew-poole-455908254/" target="_blank" title="ApexPredator at LinkedIn">
+      <span class="grey fa-brands fa-linkedin fa-lg"></span>
+    </a>
+  </li>
+  <li>
+    <a href="https://apexpredator-infosec.github.io/feed.xml" target="_blank" title="Subscribe to syndication feed">
+      <svg class="svg-icon grey" viewbox="0 0 16 16">
+        <path d="M12.8 16C12.8 8.978 7.022 3.2 0 3.2V0c8.777 0 16 7.223 16 16h-3.2zM2.194
+          11.61c1.21 0 2.195.985 2.195 2.196 0 1.21-.99 2.194-2.2 2.194C.98 16 0 15.017 0
+          13.806c0-1.21.983-2.195 2.194-2.195zM10.606
+          16h-3.11c0-4.113-3.383-7.497-7.496-7.497v-3.11c5.818 0 10.606 4.79 10.606 10.607z"
+        />
+      </svg>
+    </a>
+  </li>
+</ul>
+</div>
+
+  </div>
+
+</footer>
+
+</body>
+
+</html>

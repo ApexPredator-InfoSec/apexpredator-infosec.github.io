@@ -201,17 +201,21 @@
 
 <p>A quick side quest is necessary to discuss some important structures used by the Windows kernel. Processes are a management and control construct used by windows to control resources and scheduling of code execution. Process do not execute code themselves. Processes contain thread, and sometimes fibers, that execute the code. Running process have an EPROCESS, KPROCESS, ETHREAD, and KTHREAD structure.</p>
 
-<p>The EPROCESS structure is the virtual representation of the process in the Executive’s portion of the Windows kernel. This structure contains all of the information required by the kernel to schedule the processes threads for execution and contains references to the processes resources. It ties together the thread, memory management, and security information of the process. It contains the ActiveProcessLinks which is a doubly linked list chaining all running processes together. This is an important piece to remember as part of our Privilege Escalation is walking the ActiveProcessLinks to find the SYSTEM process, Process Identifier (PID) 4. The other important piece to remember for Privilege Escalation is that the EPROCESS also contains the Security Token. The Security Token is the identifier that ties the process to the privileges it has. So if we copy the SYSTEM process token to our current processes Security Token in it’s EPROCESS structure then our process will have the same privileges as the SYSTEM process. the integrity levels, or trust/permissions levels, for a process are low (low privileged/sandboxed user), medium (normal user), high (administrator), and SYSTEM (Full Control). The EPROCESS also conatins a pointer to the Process Environment Block (PEB) which contians the environment information for the process that is accessible via user-mode.
-<img src="/assets/images/post2-windbg-eprocess.png" alt="post2-windbg-eprocess.png" /></p>
+<p>The EPROCESS structure is the virtual representation of the process in the Executive’s portion of the Windows kernel. This structure contains all of the information required by the kernel to schedule the processes threads for execution and contains references to the processes resources. It ties together the thread, memory management, and security information of the process. It contains the ActiveProcessLinks which is a doubly linked list chaining all running processes together. This is an important piece to remember as part of our Privilege Escalation is walking the ActiveProcessLinks to find the SYSTEM process, Process Identifier (PID) 4. The other important piece to remember for Privilege Escalation is that the EPROCESS also contains the Security Token. The Security Token is the identifier that ties the process to the privileges it has. So if we copy the SYSTEM process token to our current processes Security Token in it’s EPROCESS structure then our process will have the same privileges as the SYSTEM process. the integrity levels, or trust/permissions levels, for a process are low (low privileged/sandboxed user), medium (normal user), high (administrator), and SYSTEM (Full Control). The EPROCESS also conatins a pointer to the Process Environment Block (PEB) which contians the environment information for the process that is accessible via user-mode.</p>
 
-<p>The KPROCESS structure is embedded in the EPROCESS structure. This structure is the virtual representation of the process object for the kernel. It holds the lower level  details and management of the process including scheduling, dispatcher info, ready queues, affinity, and priority for the process. It is basically all of the scheduling information for the process to schedule the threads for execution.
-<img src="/assests/images/post2-windbg-kprocess.png" alt="post2-wing-kprocess.png" /></p>
+<p><img src="/assets/images/post2-windbg-eprocess.png" alt="post2-windbg-eprocess.png" /></p>
 
-<p>The ETHREAD represents the thread for the process for the Executive portion of the Windows Kernel. This will contain thread specific resource information. It has a link back to the owning EPROCESS and has the KTHREAD embedded making it possible to walk back to the EPROCESS if you have the KTHREAD address. It also contains a pointer to the Thread Environment Block (TEB) that contains the thread’s environment information that is accessible from user-mode. In user-mode if you needed to find the stack limit and stack base for the thread you would pull it from the TEB.
-<img src="/assets/images/post2-windbg-ethread.png" alt="post2-windbg-ethread.png" /></p>
+<p>The KPROCESS structure is embedded in the EPROCESS structure. This structure is the virtual representation of the process object for the kernel. It holds the lower level  details and management of the process including scheduling, dispatcher info, ready queues, affinity, and priority for the process. It is basically all of the scheduling information for the process to schedule the threads for execution.</p>
 
-<p>The KTHREAD is embedded in the ETHREAD. This is the representation of the thread for the process in the kernel portion of the Windows Kernel. It holds stack information, dispatcher state, wait blocks, and CPU registers to restore when the thread resumes execution. It is important to remember that while to our perception threads run continuously, that is not the case in reality.  The threads are actually only allowed to run for very brief intervals on the CPU and then go to a wait state until it’s their turn to run again. Thus the CPU register values need to be stored somewhere to restore the state and continue execution. The KTHREAD is also where we can find the Previous Mode bit.  It used to be possible to create a read/write primitive by clearing the Previous Mode bit. Windows would check this bit to determine if parameters passed to the Windows 32 APIs or functions where sent from kernel-mode or user-mode. So if it was cleared to zero you could call ReadProcessMemory and NtWriteVirtualMemory to read or write kernel-mode memory from user-mode as the kernel would think that it came from a kernel-mode call instead of a user-mode call. This method is no longer possible, but is the method used in this example.
-<img src="/assets/images/post2-windbg-kthread.png" alt="post2-windbg-kthread" /></p>
+<p><img src="/assests/images/post2-windbg-kprocess.png" alt="post2-wing-kprocess.png" /></p>
+
+<p>The ETHREAD represents the thread for the process for the Executive portion of the Windows Kernel. This will contain thread specific resource information. It has a link back to the owning EPROCESS and has the KTHREAD embedded making it possible to walk back to the EPROCESS if you have the KTHREAD address. It also contains a pointer to the Thread Environment Block (TEB) that contains the thread’s environment information that is accessible from user-mode. In user-mode if you needed to find the stack limit and stack base for the thread you would pull it from the TEB.</p>
+
+<p><img src="/assets/images/post2-windbg-ethread.png" alt="post2-windbg-ethread.png" /></p>
+
+<p>The KTHREAD is embedded in the ETHREAD. This is the representation of the thread for the process in the kernel portion of the Windows Kernel. It holds stack information, dispatcher state, wait blocks, and CPU registers to restore when the thread resumes execution. It is important to remember that while to our perception threads run continuously, that is not the case in reality.  The threads are actually only allowed to run for very brief intervals on the CPU and then go to a wait state until it’s their turn to run again. Thus the CPU register values need to be stored somewhere to restore the state and continue execution. The KTHREAD is also where we can find the Previous Mode bit.  It used to be possible to create a read/write primitive by clearing the Previous Mode bit. Windows would check this bit to determine if parameters passed to the Windows 32 APIs or functions where sent from kernel-mode or user-mode. So if it was cleared to zero you could call ReadProcessMemory and NtWriteVirtualMemory to read or write kernel-mode memory from user-mode as the kernel would think that it came from a kernel-mode call instead of a user-mode call. This method is no longer possible, but is the method used in this example.</p>
+
+<p><img src="/assets/images/post2-windbg-kthread.png" alt="post2-windbg-kthread" /></p>
 
 <p>I started solving the kernel code execution piece by looking at examples of how other people have used the HalDispatchTable method (and also ensuring HCVI and VBS were disabled on the VM). Connor McGarr wrote a nice blog on exploiting Hacksys Extreme Vulnerable Driver (HEVD) in 32-bit where he used it to call his shellcode stored in a user-mode memory location. If you can understand 32-bit then you can typically easily pivot to 64-bit <a href="https://connormcgarr.github.io/Kernel-Exploitation-2">Kernel-Exploitation-2 Connor McGarr</a></p>
 
@@ -220,27 +224,36 @@
 <p>If we open up ntoskrnl.exe in IDA and search for HalDisptachTable we will find one hit.</p>
 
 <p><img src="/assets/images/post2-ida-haldispatch-table1.png" alt="post2-ida-haldispatch-table1" />
- Double click on it to see the table and look for HalDispatchTable+0x08
- <img src="/assets/images/post2-ida-haldispatch-table2.png" alt="post2-ida-haldispatch-table2" />
+ Double click on it to see the table and look for HalDispatchTable+0x08</p>
+
+<p><img src="/assets/images/post2-ida-haldispatch-table2.png" alt="post2-ida-haldispatch-table2" />
  Here it is labeled as xHalSetSystemInformation, which is weird because we know at run time it is set to nt!HaliQuerySystemInformation. We can verify this in WinDbg with:</p>
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code> dqs nt!HalDispatchTable
 </code></pre></div></div>
+
 <p><img src="/assets/images/post2-windbg-haldispatchtable-1.png" alt="post2-windbg-haldispatchtable-1" /></p>
 
-<p>Our goal is to figure out how to reach this entry in the dispatch table. If we cross reference the label off__140C00A68 in IDA by highlighting it and hiting ctrl+J or right clicking and selecting ‘list cross references to’ we will see KeQueryIntervalProfile in the list. Ke and Ki designate functions as kernel functions in Microsoft nameology. We will investigate this function as it looks interesting being a kernel function. If this was brand new to us and we were trying to find the unknown path we would likely have to investigate many of the options until we find something that works.
-<img src="/assets/images/post2-ida-kequeryintervalprofile-1.png" alt="post2-ida-kequeryintervalprofile-1" />
-When we double click the entry for KeQueryIntervalProfile we will jump to the function in IDA. It’s important to note here that we see a call to guard_dispatch_icall which is a Kernel Control Flow Guard  (KCFG) function.
-<img src="/assets/images/post2-ida-kequeryintervalprofile-2.png" alt="post2-ida-kequeryintervalprofile-2" />
-Now if we right click KeQueryIntervalProfile at the top of the graph and select “List cross reference to…” or hit ctrl+X we can see a reference in NtQueryIntervalProfile.
-<img src="/assets/images/post2-ida-kequeryintervalprofile-3.png" alt="post2-ida-kequeryintervalprofile-3" />
-As we double click and enter the NtQueryIntervalProfile function we see in the function’s prologue a “mov rax, gs:188h” followed by “mov dil, [rax+232h]” and “test dil, dil”. This loads the KTHREAD of the calling thread in to rax and then extracts the Previous Mode and checks to see if it is 0 or kernel-mode. This indicates that this function is most likely called via a syscall. 
-<img src="/assets/images/post2-windbg-previousmode-1.png" alt="post2-windbg-previousmode-1" />
-<img src="/assets/images/post2-windbg-previousmode-2.png" alt="post2-windbg-previousmode-2" /></p>
+<p>Our goal is to figure out how to reach this entry in the dispatch table. If we cross reference the label off__140C00A68 in IDA by highlighting it and hiting ctrl+J or right clicking and selecting ‘list cross references to’ we will see KeQueryIntervalProfile in the list. Ke and Ki designate functions as kernel functions in Microsoft nameology. We will investigate this function as it looks interesting being a kernel function. If this was brand new to us and we were trying to find the unknown path we would likely have to investigate many of the options until we find something that works.</p>
 
-<p>We will now jump over to ntdll.dll for further analysis. When we open up ntdll.dll in IDA and check the exports we find an NtQueryIntervalProfile function within ntdll as well.
-<img src="/assets/images/post2-ida-ntqueryintervalprofile-2.png" alt="post2-ida-ntqueryintervalprofile-2" />
-When we double click on the function to jump to the disassembly graph we see a short function that makes a 0x151 syscall.
-<img src="/assets/images/post2-ida-ntqueryintervalprofile-3.png" alt="post2-ida-ntqueryintervalprofile-3" />
+<p><img src="/assets/images/post2-ida-kequeryintervalprofile-1.png" alt="post2-ida-kequeryintervalprofile-1" />
+When we double click the entry for KeQueryIntervalProfile we will jump to the function in IDA. It’s important to note here that we see a call to guard_dispatch_icall which is a Kernel Control Flow Guard  (KCFG) function.</p>
+
+<p><img src="/assets/images/post2-ida-kequeryintervalprofile-2.png" alt="post2-ida-kequeryintervalprofile-2" />
+Now if we right click KeQueryIntervalProfile at the top of the graph and select “List cross reference to…” or hit ctrl+X we can see a reference in NtQueryIntervalProfile.</p>
+
+<p><img src="/assets/images/post2-ida-kequeryintervalprofile-3.png" alt="post2-ida-kequeryintervalprofile-3" />
+As we double click and enter the NtQueryIntervalProfile function we see in the function’s prologue a “mov rax, gs:188h” followed by “mov dil, [rax+232h]” and “test dil, dil”. This loads the KTHREAD of the calling thread in to rax and then extracts the Previous Mode and checks to see if it is 0 or kernel-mode. This indicates that this function is most likely called via a syscall.</p>
+
+<p><img src="/assets/images/post2-windbg-previousmode-1.png" alt="post2-windbg-previousmode-1" /></p>
+
+<p><img src="/assets/images/post2-windbg-previousmode-2.png" alt="post2-windbg-previousmode-2" /></p>
+
+<p>We will now jump over to ntdll.dll for further analysis. When we open up ntdll.dll in IDA and check the exports we find an NtQueryIntervalProfile function within ntdll as well.</p>
+
+<p><img src="/assets/images/post2-ida-ntqueryintervalprofile-2.png" alt="post2-ida-ntqueryintervalprofile-2" />
+When we double click on the function to jump to the disassembly graph we see a short function that makes a 0x151 syscall.</p>
+
+<p><img src="/assets/images/post2-ida-ntqueryintervalprofile-3.png" alt="post2-ida-ntqueryintervalprofile-3" />
 We can then switch back to WinDbg and verify that syscall 0x151 calls to nt!NtQueryIntervalProfile. We consult the KiServiceTable which is a table of offsets in to ntoskrnl and the syscall number is the index in to the KiServiceTable to find the offset of the desired function. We then take the value found and the index and right shift it 4 bits. We then add that to nt!KiServiceTable and disassemble at that address. We use the following commands to verify the syscall:</p>
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>dd nt!KiServiceTable + 0x04 * 0x151 L1
 
@@ -248,6 +261,7 @@ We can then switch back to WinDbg and verify that syscall 0x151 calls to nt!NtQu
 
 u nt!KiServiceTable + 00000000`0064fcd0
 </code></pre></div></div>
+
 <p><img src="/assets/images/post2-windbg-syscall-1.png" alt="post2-windbg-syscall-1" />
 We can call this function from user-mode since it is exported from ntdll.dll. This is an undocumented API and Microsoft does not intended for us to directly call it. Luckily other researchers have performed the RE necessary to determine the function prototype so that we know how to call it. <a href="https://ntdoc.m417z.com/ntqueryintervalprofile">NtDoc</a> lists the prototype as:</p>
 <div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cp">#ifndef _NTEXAPI_H
@@ -872,19 +886,25 @@ End
 
 <p>If we run this code we will see the VM freeze once it starts perfoming the HalDispatchTable hijack and when we switch to the debugger we see a crash with a 0x139 bugcheck. This was confusing to troubleshoot at first because it mentioned a stack overflow in the full dump from !analyze -v (that detailed dump does not work on my testing VM for this scenario for some reason). The code is actually a KERNEL_SECURITY_CHECK_FAILURE. Arguments 1-3 were null and not relevant in this crash, however, argument 4 showed the user-mode address allocated for the shellcode.
 <img src="/assets/images/post2-bugcheck-run.png" alt="post2-bugcheck-run" /><img src="/assets/images/post2-windbg-bugcheck.png" alt="post2-windbg-bugcheck" />
-If we were to use a double call to the CVE-2015-5736 ICOTL setting the callback to the user-mode address on the second call we would successfully get a SYSTEM command shell without a crash. I’ll save you reading space by not copying the full code here. There is only minor changes in the main() function and the shellcode. You can find the code on the repo <a href="https://github.com/ApexPredator-InfoSec/forti_shield/blob/main/doublecall.cpp">doublecall.cpp</a> <a href="https://github.com/ApexPredator-InfoSec/forti_shield/blob/main/doublecall.asm">doublecall.asm</a> Replace the code in the kstack.cpp file with the code from doublecall.cpp and replace the code in token_stealing.asm with the code in doublecall.asm if you want to try it out.
-<img src="/assets/images/post2-doublecall.png" alt="post2-doublecall" />
+If we were to use a double call to the CVE-2015-5736 ICOTL setting the callback to the user-mode address on the second call we would successfully get a SYSTEM command shell without a crash. I’ll save you reading space by not copying the full code here. There is only minor changes in the main() function and the shellcode. You can find the code on the repo <a href="https://github.com/ApexPredator-InfoSec/forti_shield/blob/main/doublecall.cpp">doublecall.cpp</a> <a href="https://github.com/ApexPredator-InfoSec/forti_shield/blob/main/doublecall.asm">doublecall.asm</a> Replace the code in the kstack.cpp file with the code from doublecall.cpp and replace the code in token_stealing.asm with the code in doublecall.asm if you want to try it out.</p>
+
+<p><img src="/assets/images/post2-doublecall.png" alt="post2-doublecall" />
 We see that we can execute code in kernel-mode from a user-mode memory address if we do the double call to the vulnerable IOCTL so why does it crash if we hijack the HalDispatchTable? Connor McGarr actually gave a talk at BlackHat USA 2025 about CFG and KCFG. In it he notes that KCFG acts like software Supervisor Mode Execution Prevention (SMEP). Even if HVCI is disabled KCFG will still act as software SMEP and monitor indirect calls on KCFG protected functions to ensure they never invoke a user-mode address. <a href="https://i.blackhat.com/BH-USA-25/Presentations/USA-25-McGarr-Out-Of-Control-KCFG-And-KCET.pdf">Connor McGarr BHUSE25</a></p>
 
-<p>We saw during our RE that KeQueryIntervalProfile had a call to KCFG (guard_dispatch_icall). This monitors the indirect call and since it sees a user-mode address it will initiate a bugcheck and crash the system. This is evident in the call stack (k command in WinDbg). We see from the call stack that nt!KeQueryIntervalProfile+0x3e calls nt!guard_icall_bugcheck+0x1b and then we progress through the bugcheck crash.
-<img src="../assets/images/post2-ida-kequeryintervalprofile-2 1.png" alt="post2-ida-kequeryintervalprofile-2" />
-<img src="/assets/images/post2-windbg-callstack.png" alt="post2-windbg-callstack" />
+<p>We saw during our RE that KeQueryIntervalProfile had a call to KCFG (guard_dispatch_icall). This monitors the indirect call and since it sees a user-mode address it will initiate a bugcheck and crash the system. This is evident in the call stack (k command in WinDbg). We see from the call stack that nt!KeQueryIntervalProfile+0x3e calls nt!guard_icall_bugcheck+0x1b and then we progress through the bugcheck crash.</p>
+
+<p><img src="../assets/images/post2-ida-kequeryintervalprofile-2 1.png" alt="post2-ida-kequeryintervalprofile-2" /></p>
+
+<p><img src="/assets/images/post2-windbg-callstack.png" alt="post2-windbg-callstack" />
 So to fix this we either need to pivot to a method that does not include the KCFG indirect call check or use a kernel-mode address to host our shellcode. We already know we can use another call to fortishield to call our shellcode without KCFG interfering so we will search for a kernel-mode address to make the HalDispatchTable hijack work. Again, we must remember that HVCI is disabled in this scenario as it would prevent dynamic code and would not allow kernel memory to be writable and executable at the same time thanks to Mode Based Execution Control (MBEC). MBEC is a hardware feature enabled in the CPU to power HVCI to thwart dynamic code. <a href="https://learn.microsoft.com/en-us/windows/security/hardware-security/enable-virtualization-based-protection-of-code-integrity?tabs=security">HVCI</a></p>
 
 <p>To use a kernel-mode address for our shellcode we must either already know the address or be able to leak it. It needs to be writable and executable. We could use the concept of a code cave where we find a null page (0x1000 bytes) in the .text section of a module we do have the address for, which is currently nt and fortishield. We could then use the write primitive to make the page writable to copy our shellcode and the use the write primitive to restore it to Read-only and execute. This could lead to a problem with crashing due to PatchGuard detecting our changes to loaded kernel modules if we are not able to make changes, execute shellcode, and restore everything back to normal.</p>
 
-<p>There is another option though. If we dump our KTHREAD for our exploit in WinDbg and check the stack we can see more than enough unused space towards the stack base to host our shellcode. <img src="/assets/images/post2-windbg-find-kthread.png" alt="post2-windbg-find-kthread" />
-<img src="/assets/images/post2-windbg-kstack.png" alt="post2-windbg-kstack" /></p>
+<p>There is another option though. If we dump our KTHREAD for our exploit in WinDbg and check the stack we can see more than enough unused space towards the stack base to host our shellcode.</p>
+
+<p><img src="/assets/images/post2-windbg-find-kthread.png" alt="post2-windbg-find-kthread" /></p>
+
+<p><img src="/assets/images/post2-windbg-kstack.png" alt="post2-windbg-kstack" /></p>
 
 <p>Manipulating the KSTACK could cause stability issues or other bugs, but we are only using this executable to run our exploit and elevate our process to SYSTEM by stealing the SYSTEM token. We could write our shellcode close to the base, make it executable, and then write this address to HalDsipatchTable+0x8. After elevating our process to system we would then restore the KSTACK to non-executable, restore the HalDispatchTable, and reset the U/S bit on our KTHREAD and spawn a cmd prompt. We will generate a bugcheck if we attempt to use system(“start cmd.exe”) without resetting the U/S bit as the kernel should not be making a user-mode call to start cmd.exe.</p>
 
@@ -1024,7 +1044,9 @@ _TEXT	ENDS
 End
 </code></pre>
 
-<p>And for our hard work we receive a nice SYSTEM command shell.<img src="/assets/images/post2-kstack-success.png" alt="post2-kstack-success" /></p>
+<p>And for our hard work we receive a nice SYSTEM command shell.</p>
+
+<p><img src="/assets/images/post2-kstack-success.png" alt="post2-kstack-success" /></p>
 
   </div>
 
